@@ -1,0 +1,546 @@
+openapi: 3.0.3
+info:
+  title: Users REST API
+  version: 1.0.0
+  description: |
+    Users API. Импорт в Swagger Editor / Postman.
+    Проверка файла — `npm run openapi:validate`.
+    Ошибки — объект `error` с полями `code`, `message`, при валидации ещё `details`.
+
+servers:
+  - url: http://localhost:3000
+    description: Локальная разработка
+
+tags:
+  - name: Users
+  - name: Health
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      operationId: healthCheck
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /api/v1/users/register:
+    post:
+      tags: [Users]
+      operationId: registerUser
+      summary: Регистрация
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /api/v1/users/login:
+    post:
+      tags: [Users]
+      operationId: loginUser
+      summary: Авторизация (JWT)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /api/v1/users:
+    get:
+      tags: [Users]
+      operationId: listUsers
+      summary: Список пользователей (admin)
+      description: |
+        Пагинация через query: `page` (целое ≥ 1, по умолчанию 1),
+        `limit` (целое 1–100, по умолчанию 20).
+        Пример: `GET /api/v1/users?page=1&limit=10`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+      responses:
+        '200':
+          description: OK — массив пользователей и meta пагинации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserListResponse'
+              example:
+                data:
+                  - id: 550e8400-e29b-41d4-a716-446655440001
+                    fullName: Иванова Мария Петровна
+                    birthDate: '1992-07-15'
+                    email: maria@example.com
+                    role: user
+                    status: active
+                    createdAt: '2026-01-10T12:00:00.000Z'
+                    updatedAt: '2026-01-10T12:00:00.000Z'
+                  - id: 550e8400-e29b-41d4-a716-446655440002
+                    fullName: Петров Иван Сергеевич
+                    birthDate: '1988-03-22'
+                    email: ivan@example.com
+                    role: admin
+                    status: active
+                    createdAt: '2026-01-11T09:30:00.000Z'
+                    updatedAt: '2026-01-11T09:30:00.000Z'
+                meta:
+                  page: 1
+                  limit: 10
+                  total: 42
+                  totalPages: 5
+        '400':
+          description: Невалидные page/limit (0, отрицательные, дробные, limit > 100)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: VALIDATION_ERROR
+                  message: limit must be at most 100
+                  details:
+                    fields:
+                      - field: limit
+                        code: too_big
+                        message: limit must be at most 100
+                    fieldErrors:
+                      limit:
+                        - limit must be at most 100
+                    formErrors: []
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /api/v1/users/{id}:
+    get:
+      tags: [Users]
+      operationId: getUserById
+      summary: Профиль по ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /api/v1/users/{id}/block:
+    patch:
+      tags: [Users]
+      operationId: blockUser
+      summary: Блокировка (inactive)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: Невалидный UUID в path
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: VALIDATION_ERROR
+                  message: Invalid user id
+        '401':
+          description: Bearer token отсутствует или недействителен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: UNAUTHORIZED
+                  message: Bearer token required
+        '403':
+          description: Недостаточно прав (например, user блокирует чужой профиль)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: FORBIDDEN
+                  message: Insufficient permissions
+        '404':
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: NOT_FOUND
+                  message: User not found
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    UserId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PageQuery:
+      name: page
+      in: query
+      description: Номер страницы (целое ≥ 1)
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      example: 1
+    LimitQuery:
+      name: limit
+      in: query
+      description: Размер страницы (целое 1–100)
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      example: 10
+
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: ok
+
+    RegisterRequest:
+      type: object
+      required: [fullName, birthDate, email, password]
+      properties:
+        fullName:
+          type: string
+          minLength: 2
+          maxLength: 200
+        birthDate:
+          type: string
+          format: date
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    User:
+      type: object
+      required: [id, fullName, birthDate, email, role, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+        birthDate:
+          type: string
+          format: date
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, user]
+        status:
+          type: string
+          enum: [active, inactive]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    UserResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/User'
+
+    LoginResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [accessToken, tokenType, user]
+          properties:
+            accessToken:
+              type: string
+            tokenType:
+              type: string
+              enum: [Bearer]
+            user:
+              $ref: '#/components/schemas/User'
+
+    UserListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    PaginationMeta:
+      type: object
+      required: [page, limit, total, totalPages]
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+
+    ValidationFieldError:
+      type: object
+      required: [field, code, message]
+      properties:
+        field:
+          type: string
+          example: password
+        code:
+          type: string
+          example: too_small
+        message:
+          type: string
+          example: password must be at least 8 characters
+
+    ValidationErrorDetails:
+      type: object
+      required: [fields, fieldErrors, formErrors]
+      properties:
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationFieldError'
+        fieldErrors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+        formErrors:
+          type: array
+          items:
+            type: string
+
+    ErrorBody:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Код ошибки для клиента
+          example: VALIDATION_ERROR
+        message:
+          type: string
+        details:
+          $ref: '#/components/schemas/ValidationErrorDetails'
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          $ref: '#/components/schemas/ErrorBody'
+
+  responses:
+    BadRequest:
+      description: Невалидный JSON или ошибка валидации
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            default:
+              summary: validation error
+              value:
+                error:
+                  code: VALIDATION_ERROR
+                  message: password must be at least 8 characters
+                  details:
+                    fields:
+                      - field: password
+                        code: too_small
+                        message: password must be at least 8 characters
+                    fieldErrors:
+                      password:
+                        - password must be at least 8 characters
+                    formErrors: []
+            validation:
+              summary: validation error (duplicate)
+              value:
+                error:
+                  code: VALIDATION_ERROR
+                  message: password must be at least 8 characters
+                  details:
+                    fields:
+                      - field: password
+                        code: too_small
+                        message: password must be at least 8 characters
+                    fieldErrors:
+                      password:
+                        - password must be at least 8 characters
+                    formErrors: []
+            invalidJson:
+              summary: INVALID_JSON
+              value:
+                error:
+                  code: INVALID_JSON
+                  message: Request body must be valid JSON
+
+    Unauthorized:
+      description: Нет Bearer token, невалидный JWT или неверные учётные данные при login
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            missingToken:
+              value:
+                error:
+                  code: UNAUTHORIZED
+                  message: Bearer token required
+            invalidLogin:
+              value:
+                error:
+                  code: UNAUTHORIZED
+                  message: Invalid email or password
+
+    Forbidden:
+      description: Недостаточно прав (роль/доступ к чужому ресурсу)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: FORBIDDEN
+              message: Insufficient permissions
+
+    NotFound:
+      description: Ресурс не найден
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: NOT_FOUND
+              message: User not found
+
+    Conflict:
+      description: Конфликт данных
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: CONFLICT
+              message: Email already registered
+
+    TooManyRequests:
+      description: Rate limit
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: TOO_MANY_REQUESTS
+              message: Too many requests, try again later

@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: users-service-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: users
+      POSTGRES_PASSWORD: users
+      POSTGRES_DB: users
+    ports:
+      - '5432:5432'
+    volumes:
+      - users_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U users -d users']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  users_pg_data:
